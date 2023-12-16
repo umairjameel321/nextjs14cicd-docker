@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  web:
+    build: .
+    image: nextjs14cicd-docker:1.0
+    ports:
+      - '3000:3000'
