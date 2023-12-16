@@ -34,4 +34,55 @@ jobs:
           configFile: commitlint.config.cjs
 
       - name: Build Docker Image
-        run: docker build -t next14-docker-cicd:1.0 .
+        run: docker build -t nextjs14cicd-docker:1.0 .
+
+        # If we do this, we don't need to build image during CD below.
+        #   - name: Push Docker Image to Registry
+        #     run: |
+        #       docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        #       docker push nextjs14cicd-docker:1.0
+
+  deploy:
+    name: Deploy to Heroku
+    needs: build-and-test
+    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20.9.0'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Docker Image
+        run: docker-compose up --build -d
+
+      #   - name: Pull and Deploy Docker Image to Heroku
+      #     run: |
+      #       heroku container:login
+      #       heroku container:pull web next14-docker-cicd:1.0
+      #       heroku container:release web -a next14-docker-cicd
+
+      - name: Log in to the Heroku Container Registry
+        run: heroku container:login
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+      - name: Tag and Push Docker Image to Heroku
+        run: |
+          docker tag nextjs14cicd-docker:1.0 registry.heroku.com/nextjs14cicd-docker/web
+          docker push registry.heroku.com/nextjs14cicd-docker/web
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+      - name: Release the Image to Heroku
+        run: heroku container:release web -a nextjs14cicd-docker
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
